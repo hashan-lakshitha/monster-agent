@@ -98,7 +98,7 @@ const MonsterAgent = () => {
             return;
         }
 
-        if (q.toLowerCase() === '/model') {
+        if (q.trim().toLowerCase() === '/model') {
             setStatus('thinking');
             try {
                 const res = await ollama.list();
