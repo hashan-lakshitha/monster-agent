@@ -27,6 +27,12 @@ const gatewayIp = getGatewayIp();
 const sysCtx = getSystemContext();
 const ollama = new Ollama({ host: `http://${gatewayIp}:11434` });
 const HISTORY_FILE = path.join(os.homedir(), '.monster_history.json');
+const CODE_DIR = path.join(os.homedir(), '.monster_code');
+
+// Ensure the code directory exists
+if (!fs.existsSync(CODE_DIR)) {
+    fs.mkdirSync(CODE_DIR);
+}
 
 const DEVICE_INFO = `[SYSTEM PROFILE]
 User: ${sysCtx.user} | Local IP: ${sysCtx.localIp}
@@ -36,6 +42,7 @@ OS: Kali Linux VM | Permissions: FULL ROOT ACCESS`;
 const SYSTEM_PROMPT = `You are MONSTER-AI, an elite Kali Linux Expert Assistant.
 Context: ${DEVICE_INFO}
 You have a tool called 'run_command' to run shell commands in the Kali terminal.
+You have a tool called 'write_code' to write code to files.
 If the user asks you to perform a task, use the tool. If they just ask a question, answer natively.
 Keep your responses concise and hacker-oriented.`;
 
@@ -203,19 +210,40 @@ const MonsterAgent = () => {
                             required: ['command']
                         }
                     }
+                }, {
+                    type: 'function',
+                    function: {
+                        name: 'write_code',
+                        description: 'Write code to a file',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                filename: { type: 'string', description: 'The filename to write to' },
+                                content: { type: 'string', description: 'The code content to write' }
+                            },
+                            required: ['filename', 'content']
+                        }
+                    }
                 }]
             });
 
             const msg = res.message;
             let parsedToolCall = null;
+            let parsedWriteCall = null;
 
             if (msg.tool_calls && msg.tool_calls.length > 0) {
-                parsedToolCall = msg.tool_calls[0].function.arguments.command;
+                if (msg.tool_calls[0].function.name === 'run_command') {
+                    parsedToolCall = msg.tool_calls[0].function.arguments.command;
+                } else if (msg.tool_calls[0].function.name === 'write_code') {
+                    parsedWriteCall = msg.tool_calls[0].function.arguments;
+                }
             } else if (msg.content) {
                 try {
                     const parsed = JSON.parse(msg.content.trim());
                     if (parsed.name === 'run_command' && parsed.arguments && parsed.arguments.command) {
                         parsedToolCall = parsed.arguments.command;
+                    } else if (parsed.name === 'write_code' && parsed.arguments && parsed.arguments.filename && parsed.arguments.content) {
+                        parsedWriteCall = parsed.arguments;
                     }
                 } catch (e) {}
             }
@@ -226,6 +254,11 @@ const MonsterAgent = () => {
             if (parsedToolCall) {
                 setPendingCmd(parsedToolCall as string);
                 setStatus('confirming_exec');
+            } else if (parsedWriteCall) {
+                const filePath = path.join(CODE_DIR, parsedWriteCall.filename);
+                fs.writeFileSync(filePath, parsedWriteCall.content);
+                updateHistory([...updatedHistory, { role: 'assistant', content: `[+] Code written to ${filePath}` }]);
+                setStatus('idle');
             } else {
                 setStatus('idle');
             }
@@ -349,10 +382,7 @@ const MonsterAgent = () => {
             {mode === 'menu' ? (
                 <Box paddingLeft={2} marginTop={1}>
                     <Text color="cyanBright" bold>➤  </Text>
-                    {(TextInput as any).default 
-                        ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleSubmit }) 
-                        : <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
-                    }
+                    <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
                 </Box>
             ) : status === 'confirming_exec' ? (
                 <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="yellow" paddingX={1}>
@@ -366,10 +396,7 @@ const MonsterAgent = () => {
                     <Box flexDirection="row">
                         <Text bold>Execute? [y/N] ➤ </Text>
                         <Box paddingLeft={1}>
-                            {(TextInput as any).default 
-                                ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleConfirm }) 
-                                : <TextInput value={input} onChange={setInput} onSubmit={handleConfirm} />
-                            }
+                            <TextInput value={input} onChange={setInput} onSubmit={handleConfirm} />
                         </Box>
                     </Box>
                 </Box>
@@ -388,10 +415,7 @@ const MonsterAgent = () => {
                     <Box flexDirection="row">
                         <Text color="redBright" bold>╰─➤ </Text>
                         <Box paddingLeft={1}>
-                            {(TextInput as any).default 
-                                ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleSubmit }) 
-                                : <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
-                            }
+                            <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
                         </Box>
                     </Box>
                 </Box>
