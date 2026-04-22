@@ -63,20 +63,46 @@ const DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'qwen2.5-coder:32b';
 const MonsterAgent = () => {
     const { exit } = useApp();
     const [model, setModel] = useState<string>(DEFAULT_MODEL); // Default
-    const [history, setHistory] = useState<Array<{ role: string, content: string, tool_calls?: any, name?: string }>>(loadHistory());
+    const [history, setHistory] = useState<Array<{ role: string, content: string, tool_calls?: any, name?: string }>>([]);
     const [input, setInput] = useState('');
     const [status, setStatus] = useState<'idle' | 'thinking' | 'confirming_exec'>('idle');
     const [pendingCmd, setPendingCmd] = useState<string>('');
     const [availableModels, setAvailableModels] = useState<string[] | null>(null);
+    const [mode, setMode] = useState<'menu' | 'chat'>('menu');
+    const [isIncognito, setIsIncognito] = useState(false);
 
-    const updateHistory = (newHist: any) => {
+    const updateHistory = (newHist: any, incognitoState: boolean = isIncognito) => {
         setHistory(newHist);
-        saveHistory(newHist);
+        if (!incognitoState) {
+            saveHistory(newHist);
+        }
     };
 
-    // Ask Ollama
+    // Main Submit Handler
     const handleSubmit = async (q: string) => {
         if (!q.trim()) return;
+
+        if (mode === 'menu') {
+            const opt = q.trim();
+            if (opt === '1') {
+                setIsIncognito(false);
+                setHistory(loadHistory());
+                setMode('chat');
+            } else if (opt === '2') {
+                setIsIncognito(false);
+                const fresh = [{ role: 'system', content: SYSTEM_PROMPT }];
+                updateHistory(fresh, false);
+                setMode('chat');
+            } else if (opt === '3') {
+                setIsIncognito(true);
+                setHistory([{ role: 'system', content: SYSTEM_PROMPT }]);
+                setMode('chat');
+            } else if (opt.toLowerCase() === 'exit') {
+                exit();
+            }
+            setInput('');
+            return;
+        }
 
         const normalizedQ = q.trim().toLowerCase();
 
@@ -264,6 +290,8 @@ const MonsterAgent = () => {
                     <Box marginBottom={1}>
                         <Text color="redBright" bold>[!] MONSTER HACKER AGENT </Text>
                         <Text color="dim"> {model} </Text>
+                        <Text color="magentaBright" bold> | Dev: @hu </Text>
+                        {isIncognito && <Text color="yellowBright" bold> [INCOGNITO MODE]</Text>}
                     </Box>
                     <Box flexDirection="row">
                         <Box marginRight={2}><Text color="dim">User:</Text><Text color="white" bold> {sysCtx.user}</Text></Box>
@@ -273,25 +301,42 @@ const MonsterAgent = () => {
                 </Box>
             </Box>
 
-            {/* Chat History */}
-            <Box flexDirection="column" marginBottom={1}>
-                {history.filter(h => h.role !== 'system' && h.role !== 'tool').map((msg, i) => (
-                    <Box key={i} flexDirection="column" marginTop={1}>
-                        {msg.role === 'user' ? (
-                            <Box flexDirection="row">
-                                <Text color="redBright" bold>╭─</Text>
-                                <Text color="cyan" bold> {sysCtx.user}@kali </Text>
-                                <Text color="dim">in </Text>
-                                <Text color="yellow" bold>~ </Text>
-                                <Text color="dim">❯ </Text>
-                                <Text color="white">{msg.content}</Text>
-                            </Box>
-                        ) : (
-                            <Box flexDirection="column" paddingLeft={2} borderStyle="single" borderColor="green">
-                                <Text bold color="green">[MONSTER-AI]</Text>
-                                {msg.content && <Box marginTop={1}><Text color="white">{msg.content}</Text></Box>}
-                            </Box>
-                        )}
+            {mode === 'menu' ? (
+                <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderColor="cyan">
+                    <Text color="cyanBright" bold>[!] SELECT MODE:</Text>
+                    <Box marginTop={1} flexDirection="column">
+                        <Text color="white">  [1] Continue Last Chat  [Save: {chalk.greenBright('ON')}]</Text>
+                        <Text color="white">  [2] New Chat            [Save: {chalk.redBright('OVERWRITE')}]</Text>
+                        <Text color="white">  [3] Incognito Chat      [Save: {chalk.blueBright('OFF')}]</Text>
+                    </Box>
+                    <Box marginTop={1}>
+                        <Text color="dim">  Type 'exit' to quit</Text>
+                    </Box>
+                </Box>
+            ) : (
+                <Box flexDirection="column" marginBottom={1}>
+                    {/* Chat History */}
+                    {history.filter(h => h.role !== 'system' && h.role !== 'tool').map((msg, i) => (
+                        <Box key={i} flexDirection="column" marginTop={1}>
+                            {msg.role === 'user' ? (
+                                <Box flexDirection="row">
+                                    <Text color="redBright" bold>╭─</Text>
+                                    <Text color="cyan" bold> {sysCtx.user}@kali </Text>
+                                    <Text color="dim">in </Text>
+                                    <Text color="yellow" bold>~ </Text>
+                                    <Text color="dim">❯ </Text>
+                                    <Text color="white">{msg.content}</Text>
+                                </Box>
+                            ) : (
+                                <Box flexDirection="column" paddingLeft={2} borderStyle="single" borderColor="green">
+                                    <Text bold color="green">[MONSTER-AI]</Text>
+                                    {msg.content && <Box marginTop={1}><Text color="white">{msg.content}</Text></Box>}
+                                </Box>
+                            )}
+                        </Box>
+                    ))}
+                </Box>
+            )}
                         {/* Tool Calls */}
                         {msg.role === 'assistant' && msg.tool_calls && (
                             <Box flexDirection="row" paddingLeft={3} marginTop={1}>
