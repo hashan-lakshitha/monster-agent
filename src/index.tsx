@@ -98,7 +98,9 @@ const MonsterAgent = () => {
             return;
         }
 
-        if (q.trim().toLowerCase() === '/model') {
+        const normalizedQ = q.trim().toLowerCase();
+
+        if (normalizedQ === '/model') {
             setStatus('thinking');
             try {
                 const res = await ollama.list();
@@ -118,8 +120,8 @@ const MonsterAgent = () => {
             return;
         }
 
-        if (q.toLowerCase() === 'exit') { exit(); return; }
-        if (q.toLowerCase() === 'help') {
+        if (normalizedQ === 'exit') { exit(); return; }
+        if (normalizedQ === 'help') {
             const helpMsg = `[!] MONSTER-AI AGENT CONTROLS:
 - help          : Show this help message
 - exit          : Exit the agent
@@ -131,12 +133,12 @@ const MonsterAgent = () => {
             setInput('');
             return;
         }
-        if (q.toLowerCase() === 'clear history') {
+        if (normalizedQ === 'clear history') {
             updateHistory([{ role: 'system', content: SYSTEM_PROMPT }]);
             return;
         }
 
-        if (q.trim().toLowerCase().startsWith('/model ')) {
+        if (normalizedQ.startsWith('/model ')) {
             const newModel = q.trim().substring(7).trim();
             if (newModel) {
                 setModel(newModel);
@@ -147,7 +149,7 @@ const MonsterAgent = () => {
         }
 
         // Prevent any command starting with '/' from being sent to the AI
-        if (q.trim().startsWith('/')) {
+        if (normalizedQ.startsWith('/')) {
             updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[!] Unknown or invalid command: ${q.trim()}\nType 'help' to see available controls.` }]);
             setInput('');
             return;
