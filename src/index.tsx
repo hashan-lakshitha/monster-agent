@@ -160,7 +160,7 @@ const MonsterAgent = () => {
                                 <Text color="white">{msg.content}</Text>
                             </Box>
                         ) : (
-                            <Box flexDirection="column" paddingLeft={2} borderStyle="singleLeft" borderColor="green">
+                            <Box flexDirection="column" paddingLeft={2} borderStyle="single" borderColor="green">
                                 <Text bold color="green">[MONSTER-AI]</Text>
                                 {msg.content && <Box marginTop={1}><Text color="white">{msg.content}</Text></Box>}
                             </Box>
@@ -178,7 +178,7 @@ const MonsterAgent = () => {
 
             {/* Loading State */}
             {status === 'thinking' && (
-                <Box marginTop={1} paddingLeft={2} borderStyle="singleLeft" borderColor="magenta">
+                <Box marginTop={1} paddingLeft={2} borderStyle="single" borderColor="magenta">
                     <Text color="magenta"><Spinner type="dots" /> Thinking...</Text>
                 </Box>
             )}
