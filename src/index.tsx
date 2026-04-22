@@ -78,6 +78,8 @@ const MonsterAgent = () => {
     const handleSubmit = async (q: string) => {
         if (!q.trim()) return;
 
+        const normalizedQ = q.trim().toLowerCase();
+
         if (availableModels !== null) {
             const val = q.trim();
             if (val.toLowerCase() === 'cancel' || val === '0') {
@@ -97,8 +99,6 @@ const MonsterAgent = () => {
             setInput('');
             return;
         }
-
-        const normalizedQ = q.trim().toLowerCase();
 
         if (normalizedQ === '/model') {
             setStatus('thinking');
