@@ -68,13 +68,24 @@ const MonsterAgent = () => {
             });
 
             const msg = res.message;
+            let parsedToolCall = null;
+
+            if (msg.tool_calls && msg.tool_calls.length > 0) {
+                parsedToolCall = msg.tool_calls[0].function.arguments.command;
+            } else if (msg.content) {
+                try {
+                    const parsed = JSON.parse(msg.content.trim());
+                    if (parsed.name === 'run_command' && parsed.arguments && parsed.arguments.command) {
+                        parsedToolCall = parsed.arguments.command;
+                    }
+                } catch (e) {}
+            }
+
             const updatedHistory = [...newHistory, msg];
             setHistory(updatedHistory);
 
-            if (msg.tool_calls && msg.tool_calls.length > 0) {
-                // Pick the first tool call
-                const cmd = msg.tool_calls[0].function.arguments.command;
-                setPendingCmd(cmd as string);
+            if (parsedToolCall) {
+                setPendingCmd(parsedToolCall as string);
                 setStatus('confirming_exec');
             } else {
                 setStatus('idle');
