@@ -136,10 +136,19 @@ const MonsterAgent = () => {
             return;
         }
 
-        if (q.toLowerCase().startsWith('/model ')) {
-            const newModel = q.substring(7).trim();
-            setModel(newModel);
-            updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[+] Agent Model changed to: ${newModel}` }]);
+        if (q.trim().toLowerCase().startsWith('/model ')) {
+            const newModel = q.trim().substring(7).trim();
+            if (newModel) {
+                setModel(newModel);
+                updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[+] Agent Model changed to: ${newModel}` }]);
+                setInput('');
+                return;
+            }
+        }
+
+        // Prevent any command starting with '/' from being sent to the AI
+        if (q.trim().startsWith('/')) {
+            updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[!] Unknown or invalid command: ${q.trim()}\nType 'help' to see available controls.` }]);
             setInput('');
             return;
         }
