@@ -56,10 +56,13 @@ const saveHistory = (hist: any) => {
     } catch (e) {}
 };
 
+setTimeout(() => {}, 0); // Keep alive if removed
+const DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'qwen2.5-coder:32b';
+
 // App Component
 const MonsterAgent = () => {
     const { exit } = useApp();
-    const [model, setModel] = useState<string>('qwen2.5-coder:32b'); // Default
+    const [model, setModel] = useState<string>(DEFAULT_MODEL); // Default
     const [history, setHistory] = useState<Array<{ role: string, content: string, tool_calls?: any, name?: string }>>(loadHistory());
     const [input, setInput] = useState('');
     const [status, setStatus] = useState<'idle' | 'thinking' | 'confirming_exec'>('idle');
@@ -79,6 +82,7 @@ const MonsterAgent = () => {
 - help          : Show this help message
 - exit          : Exit the agent
 - clear history : Clear the current chat history and memory
+- /model <name> : Change AI Model (e.g. /model llama3)
 - scan network  : (Example) Tell AI to run nmap
   (You can ask any tool or linux action normally)`;
             updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: helpMsg }]);
@@ -87,6 +91,14 @@ const MonsterAgent = () => {
         }
         if (q.toLowerCase() === 'clear history') {
             updateHistory([{ role: 'system', content: SYSTEM_PROMPT }]);
+            return;
+        }
+
+        if (q.toLowerCase().startsWith('/model ')) {
+            const newModel = q.substring(7).trim();
+            setModel(newModel);
+            updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[+] Agent Model changed to: ${newModel}` }]);
+            setInput('');
             return;
         }
 
