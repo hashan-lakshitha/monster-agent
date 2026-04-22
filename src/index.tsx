@@ -67,6 +67,7 @@ const MonsterAgent = () => {
     const [input, setInput] = useState('');
     const [status, setStatus] = useState<'idle' | 'thinking' | 'confirming_exec'>('idle');
     const [pendingCmd, setPendingCmd] = useState<string>('');
+    const [availableModels, setAvailableModels] = useState<string[] | null>(null);
 
     const updateHistory = (newHist: any) => {
         setHistory(newHist);
@@ -76,13 +77,54 @@ const MonsterAgent = () => {
     // Ask Ollama
     const handleSubmit = async (q: string) => {
         if (!q.trim()) return;
+
+        if (availableModels !== null) {
+            const val = q.trim();
+            if (val.toLowerCase() === 'cancel' || val === '0') {
+                updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: '[!] Model selection cancelled.' }]);
+                setAvailableModels(null);
+            } else {
+                const num = parseInt(val);
+                if (!isNaN(num) && num > 0 && num <= availableModels.length) {
+                    const newModel = availableModels[num - 1];
+                    setModel(newModel);
+                    updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[+] Agent Model changed to: ${newModel}` }]);
+                    setAvailableModels(null);
+                } else {
+                    updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[!] Invalid selection. Enter 1-${availableModels.length} or '0' to cancel.` }]);
+                }
+            }
+            setInput('');
+            return;
+        }
+
+        if (q.toLowerCase() === '/model') {
+            setStatus('thinking');
+            try {
+                const res = await ollama.list();
+                const names = res.models.map((m: any) => m.name);
+                if (names.length === 0) {
+                    updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: '[!] No models found in Ollama.' }]);
+                } else {
+                    setAvailableModels(names);
+                    const listStr = names.map((n: string, i: number) => `[${i + 1}] ${n}`).join('\n');
+                    updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[?] Select a model by number:\n${listStr}\n\n[0] Cancel` }]);
+                }
+            } catch (err: any) {
+                updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: `[!] Failed to list models: ${err.message}` }]);
+            }
+            setStatus('idle');
+            setInput('');
+            return;
+        }
+
         if (q.toLowerCase() === 'exit') { exit(); return; }
         if (q.toLowerCase() === 'help') {
             const helpMsg = `[!] MONSTER-AI AGENT CONTROLS:
 - help          : Show this help message
 - exit          : Exit the agent
 - clear history : Clear the current chat history and memory
-- /model <name> : Change AI Model (e.g. /model llama3)
+- /model        : Show models list and select by number (or /model <name>)
 - scan network  : (Example) Tell AI to run nmap
   (You can ask any tool or linux action normally)`;
             updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: helpMsg }]);
