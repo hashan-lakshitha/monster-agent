@@ -9,7 +9,11 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import dotenv from 'dotenv';
 import { getGatewayIp, getSystemContext } from './system.js';
+
+// Load environment variables
+dotenv.config();
 
 const execAsync = util.promisify(exec);
 
@@ -65,6 +69,17 @@ const MonsterAgent = () => {
     const handleSubmit = async (q: string) => {
         if (!q.trim()) return;
         if (q.toLowerCase() === 'exit') { exit(); return; }
+        if (q.toLowerCase() === 'help') {
+            const helpMsg = `[!] MONSTER-AI AGENT CONTROLS:
+- help          : Show this help message
+- exit          : Exit the agent
+- clear history : Clear the current chat history and memory
+- scan network  : (Example) Tell AI to run nmap
+  (You can ask any tool or linux action normally)`;
+            updateHistory([...history, { role: 'user', content: q }, { role: 'assistant', content: helpMsg }]);
+            setInput('');
+            return;
+        }
         if (q.toLowerCase() === 'clear history') {
             updateHistory([{ role: 'system', content: SYSTEM_PROMPT }]);
             return;
@@ -129,9 +144,11 @@ const MonsterAgent = () => {
         if (val.toLowerCase() === 'y') {
             setStatus('thinking');
             try {
-                // Replace 'sudo ' with your preferred handling as in Python
+                // Get your 'sudo' password from .env or prompt
+                const SUDO_PASSWORD = process.env.SUDO_PASSWORD || 'kali'; // Optional Fallback to kali if .env empty
+                
                 const runStr = pendingCmd.startsWith('sudo ') 
-                    ? `echo root | sudo -S ${pendingCmd.substring(5)}` 
+                    ? `echo ${SUDO_PASSWORD} | sudo -S ${pendingCmd.substring(5)}` 
                     : pendingCmd;
 
                 const { stdout, stderr } = await execAsync(runStr);

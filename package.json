@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "chalk": "^5.3.0",
+    "dotenv": "^17.4.2",
     "ink": "^4.4.1",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^5.0.1",
