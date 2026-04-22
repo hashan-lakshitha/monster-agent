@@ -10,10 +10,15 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 import { getGatewayIp, getSystemContext } from './system.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '..', '.env');
+
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: envPath });
 
 const execAsync = util.promisify(exec);
 
