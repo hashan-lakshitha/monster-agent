@@ -6,6 +6,9 @@ import { Ollama } from 'ollama';
 import { exec } from 'child_process';
 import util from 'util';
 import chalk from 'chalk';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { getGatewayIp, getSystemContext } from './system.js';
 
 const execAsync = util.promisify(exec);
@@ -14,6 +17,7 @@ const execAsync = util.promisify(exec);
 const gatewayIp = getGatewayIp();
 const sysCtx = getSystemContext();
 const ollama = new Ollama({ host: `http://${gatewayIp}:11434` });
+const HISTORY_FILE = path.join(os.homedir(), '.monster_history.json');
 
 const DEVICE_INFO = `[SYSTEM PROFILE]
 User: ${sysCtx.user} | Local IP: ${sysCtx.localIp}
@@ -26,24 +30,48 @@ You have a tool called 'run_command' to run shell commands in the Kali terminal.
 If the user asks you to perform a task, use the tool. If they just ask a question, answer natively.
 Keep your responses concise and hacker-oriented.`;
 
+// History helpers
+const loadHistory = () => {
+    try {
+        if (fs.existsSync(HISTORY_FILE)) {
+            const data = fs.readFileSync(HISTORY_FILE, 'utf-8');
+            return JSON.parse(data);
+        }
+    } catch (e) {}
+    return [{ role: 'system', content: SYSTEM_PROMPT }];
+};
+
+const saveHistory = (hist: any) => {
+    try {
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify(hist, null, 2));
+    } catch (e) {}
+};
+
 // App Component
 const MonsterAgent = () => {
     const { exit } = useApp();
     const [model, setModel] = useState<string>('qwen2.5-coder:32b'); // Default
-    const [history, setHistory] = useState<Array<{ role: string, content: string }>>([
-        { role: 'system', content: SYSTEM_PROMPT }
-    ]);
+    const [history, setHistory] = useState<Array<{ role: string, content: string, tool_calls?: any, name?: string }>>(loadHistory());
     const [input, setInput] = useState('');
     const [status, setStatus] = useState<'idle' | 'thinking' | 'confirming_exec'>('idle');
     const [pendingCmd, setPendingCmd] = useState<string>('');
+
+    const updateHistory = (newHist: any) => {
+        setHistory(newHist);
+        saveHistory(newHist);
+    };
 
     // Ask Ollama
     const handleSubmit = async (q: string) => {
         if (!q.trim()) return;
         if (q.toLowerCase() === 'exit') { exit(); return; }
+        if (q.toLowerCase() === 'clear history') {
+            updateHistory([{ role: 'system', content: SYSTEM_PROMPT }]);
+            return;
+        }
 
         const newHistory = [...history, { role: 'user', content: q }];
-        setHistory(newHistory);
+        updateHistory(newHistory);
         setInput('');
         setStatus('thinking');
 
@@ -82,7 +110,7 @@ const MonsterAgent = () => {
             }
 
             const updatedHistory = [...newHistory, msg];
-            setHistory(updatedHistory);
+            updateHistory(updatedHistory);
 
             if (parsedToolCall) {
                 setPendingCmd(parsedToolCall as string);
@@ -91,7 +119,7 @@ const MonsterAgent = () => {
                 setStatus('idle');
             }
         } catch (e: any) {
-            setHistory(prev => [...prev, { role: 'assistant', content: `[!] Connection Error: ${e.message}` }]);
+            updateHistory([...newHistory, { role: 'assistant', content: `[!] Connection Error: ${e.message}` }]);
             setStatus('idle');
         }
     };
@@ -111,19 +139,20 @@ const MonsterAgent = () => {
                 
                 // Add tool result back to model to get final comment
                 const toolHistory = [...history, { role: 'tool', content: out.substring(0, 4000), name: 'run_command' }];
+                updateHistory(toolHistory);
                 
                 const finalRes = await ollama.chat({
                     model: model,
                     messages: toolHistory
                 });
 
-                setHistory([...toolHistory, finalRes.message]);
+                updateHistory([...toolHistory, finalRes.message]);
             } catch (err: any) {
-                setHistory(prev => [...prev, { role: 'assistant', content: `[!] Error running command: ${err.message}` }]);
+                updateHistory([...history, { role: 'assistant', content: `[!] Error running command: ${err.message}` }]);
             }
         } else {
             // Cancelled
-            setHistory(prev => [...prev, { role: 'assistant', content: `[!] Command execution cancelled by user.` }]);
+            updateHistory([...history, { role: 'assistant', content: `[!] Command execution cancelled by user.` }]);
         }
         
         setPendingCmd('');
