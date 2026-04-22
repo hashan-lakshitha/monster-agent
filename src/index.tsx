@@ -331,32 +331,53 @@ const MonsterAgent = () => {
                                 <Box flexDirection="column" paddingLeft={2} borderStyle="single" borderColor="green">
                                     <Text bold color="green">[MONSTER-AI]</Text>
                                     {msg.content && <Box marginTop={1}><Text color="white">{msg.content}</Text></Box>}
+                                    {/* Tool Calls */}
+                                    {msg.role === 'assistant' && msg.tool_calls && (
+                                        <Box flexDirection="row" marginTop={1}>
+                                            <Text color="yellow">[*] Executing Command: </Text>
+                                            <Text color="dim">[{msg.tool_calls[0].function.arguments.command}]</Text>
+                                        </Box>
+                                    )}
                                 </Box>
                             )}
                         </Box>
                     ))}
                 </Box>
             )}
-                        {/* Tool Calls */}
-                        {msg.role === 'assistant' && msg.tool_calls && (
-                            <Box flexDirection="row" paddingLeft={3} marginTop={1}>
-                                <Text color="yellow">[*] Executing Command: </Text>
-                                <Text color="dim">[{msg.tool_calls[0].function.arguments.command}]</Text>
-                            </Box>
-                        )}
-                    </Box>
-                ))}
-            </Box>
 
-            {/* Loading State */}
-            {status === 'thinking' && (
+            {/* Input Area */}
+            {mode === 'menu' ? (
+                <Box paddingLeft={2} marginTop={1}>
+                    <Text color="cyanBright" bold>➤  </Text>
+                    {(TextInput as any).default 
+                        ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleSubmit }) 
+                        : <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
+                    }
+                </Box>
+            ) : status === 'confirming_exec' ? (
+                <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="yellow" paddingX={1}>
+                    <Text color="yellowBright" bold>[!] ACTION REQUIRED: Tool Execution</Text>
+                    <Box marginY={1}>
+                        <Text color="white">The AI wants to run the following bash command:</Text>
+                    </Box>
+                    <Box paddingLeft={2} marginBottom={1}>
+                        <Text color="cyanBright">{pendingCmd}</Text>
+                    </Box>
+                    <Box flexDirection="row">
+                        <Text bold>Execute? [y/N] ➤ </Text>
+                        <Box paddingLeft={1}>
+                            {(TextInput as any).default 
+                                ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleConfirm }) 
+                                : <TextInput value={input} onChange={setInput} onSubmit={handleConfirm} />
+                            }
+                        </Box>
+                    </Box>
+                </Box>
+            ) : status === 'thinking' ? (
                 <Box marginTop={1} paddingLeft={2} borderStyle="single" borderColor="magenta">
                     <Text color="magenta"><Spinner type="dots" /> Thinking...</Text>
                 </Box>
-            )}
-
-            {/* Input State */}
-            {status === 'idle' && (
+            ) : (
                 <Box flexDirection="column" marginTop={1}>
                     <Box flexDirection="row">
                         <Text color="redBright" bold>╭─</Text>
@@ -370,28 +391,6 @@ const MonsterAgent = () => {
                             {(TextInput as any).default 
                                 ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleSubmit }) 
                                 : <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
-                            }
-                        </Box>
-                    </Box>
-                </Box>
-            )}
-
-            {/* Execution Confirmation */}
-            {status === 'confirming_exec' && (
-                <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="yellow" paddingX={1}>
-                    <Text color="yellow" bold>[!] ACTION REQUIRED: Tool Execution</Text>
-                    <Box marginY={1}>
-                        <Text color="white">The AI wants to run the following bash command:</Text>
-                    </Box>
-                    <Box paddingLeft={2} marginBottom={1}>
-                        <Text color="cyan">{pendingCmd}</Text>
-                    </Box>
-                    <Box flexDirection="row">
-                        <Text color="redBright" bold>Execute? [y/N] ➤ </Text>
-                        <Box paddingLeft={1}>
-                            {(TextInput as any).default 
-                                ? React.createElement((TextInput as any).default, { value: "", onChange: handleConfirm }) 
-                                : <TextInput value={""} onChange={handleConfirm} />
                             }
                         </Box>
                     </Box>
