@@ -1,0 +1,232 @@
+import React, { useState, useEffect } from 'react';
+import { render, Text, Box, useApp } from 'ink';
+import TextInput from 'ink-text-input';
+import Spinner from 'ink-spinner';
+import { Ollama } from 'ollama';
+import { exec } from 'child_process';
+import util from 'util';
+import chalk from 'chalk';
+import { getGatewayIp, getSystemContext } from './system.js';
+
+const execAsync = util.promisify(exec);
+
+// Initialization Context
+const gatewayIp = getGatewayIp();
+const sysCtx = getSystemContext();
+const ollama = new Ollama({ host: `http://${gatewayIp}:11434` });
+
+const DEVICE_INFO = `[SYSTEM PROFILE]
+User: ${sysCtx.user} | Local IP: ${sysCtx.localIp}
+Gateway: ${gatewayIp} | Hardware: Lenovo Legion Pro 5 (RTX 5070)
+OS: Kali Linux VM | Permissions: FULL ROOT ACCESS`;
+
+const SYSTEM_PROMPT = `You are MONSTER-AI, an elite Kali Linux Expert Assistant.
+Context: ${DEVICE_INFO}
+You have a tool called 'run_command' to run shell commands in the Kali terminal.
+If the user asks you to perform a task, use the tool. If they just ask a question, answer natively.
+Keep your responses concise and hacker-oriented.`;
+
+// App Component
+const MonsterAgent = () => {
+    const { exit } = useApp();
+    const [model, setModel] = useState<string>('qwen2.5-coder:32b'); // Default
+    const [history, setHistory] = useState<Array<{ role: string, content: string }>>([
+        { role: 'system', content: SYSTEM_PROMPT }
+    ]);
+    const [input, setInput] = useState('');
+    const [status, setStatus] = useState<'idle' | 'thinking' | 'confirming_exec'>('idle');
+    const [pendingCmd, setPendingCmd] = useState<string>('');
+
+    // Ask Ollama
+    const handleSubmit = async (q: string) => {
+        if (!q.trim()) return;
+        if (q.toLowerCase() === 'exit') { exit(); return; }
+
+        const newHistory = [...history, { role: 'user', content: q }];
+        setHistory(newHistory);
+        setInput('');
+        setStatus('thinking');
+
+        try {
+            const res = await ollama.chat({
+                model: model,
+                messages: newHistory,
+                tools: [{
+                    type: 'function',
+                    function: {
+                        name: 'run_command',
+                        description: 'Execute a bash command in the terminal',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                command: { type: 'string', description: 'The bash command to run' }
+                            },
+                            required: ['command']
+                        }
+                    }
+                }]
+            });
+
+            const msg = res.message;
+            const updatedHistory = [...newHistory, msg];
+            setHistory(updatedHistory);
+
+            if (msg.tool_calls && msg.tool_calls.length > 0) {
+                // Pick the first tool call
+                const cmd = msg.tool_calls[0].function.arguments.command;
+                setPendingCmd(cmd as string);
+                setStatus('confirming_exec');
+            } else {
+                setStatus('idle');
+            }
+        } catch (e: any) {
+            setHistory(prev => [...prev, { role: 'assistant', content: `[!] Connection Error: ${e.message}` }]);
+            setStatus('idle');
+        }
+    };
+
+    // Handle execution confirmation
+    const handleConfirm = async (val: string) => {
+        if (val.toLowerCase() === 'y') {
+            setStatus('thinking');
+            try {
+                // Replace 'sudo ' with your preferred handling as in Python
+                const runStr = pendingCmd.startsWith('sudo ') 
+                    ? `echo root | sudo -S ${pendingCmd.substring(5)}` 
+                    : pendingCmd;
+
+                const { stdout, stderr } = await execAsync(runStr);
+                const out = stdout ? stdout.trim() : (stderr ? stderr.trim() : '[Command ran successfully with no output]');
+                
+                // Add tool result back to model to get final comment
+                const toolHistory = [...history, { role: 'tool', content: out.substring(0, 4000), name: 'run_command' }];
+                
+                const finalRes = await ollama.chat({
+                    model: model,
+                    messages: toolHistory
+                });
+
+                setHistory([...toolHistory, finalRes.message]);
+            } catch (err: any) {
+                setHistory(prev => [...prev, { role: 'assistant', content: `[!] Error running command: ${err.message}` }]);
+            }
+        } else {
+            // Cancelled
+            setHistory(prev => [...prev, { role: 'assistant', content: `[!] Command execution cancelled by user.` }]);
+        }
+        
+        setPendingCmd('');
+        setStatus('idle');
+    };
+
+    return (
+        <Box flexDirection="column" paddingLeft={1} paddingTop={1}>
+            {/* Header */}
+            <Box borderStyle="round" borderColor="redBright" paddingX={2} paddingY={1} flexDirection="row" marginBottom={1}>
+                {/* Binary Skull ASCII Art */}
+                <Box flexDirection="column" marginRight={4}>
+                    <Text color="redBright" bold>   0100101   </Text>
+                    <Text color="redBright" bold> 101     011 </Text>
+                    <Text color="redBright" bold>11  0   0  11</Text>
+                    <Text color="redBright" bold>01  ▄▄▄▄▄  10</Text>
+                    <Text color="redBright" bold>  101101101  </Text>
+                </Box>
+                
+                {/* System Info */}
+                <Box flexDirection="column" justifyContent="center">
+                    <Box marginBottom={1}>
+                        <Text color="redBright" bold>[!] MONSTER HACKER AGENT </Text>
+                        <Text color="dim"> {model} </Text>
+                    </Box>
+                    <Box flexDirection="row">
+                        <Box marginRight={2}><Text color="dim">User:</Text><Text color="white" bold> {sysCtx.user}</Text></Box>
+                        <Box marginRight={2}><Text color="dim">IP:</Text><Text color="cyan"> {sysCtx.localIp}</Text></Box>
+                        <Box><Text color="dim">Gateway:</Text><Text color="cyan"> {gatewayIp}</Text></Box>
+                    </Box>
+                </Box>
+            </Box>
+
+            {/* Chat History */}
+            <Box flexDirection="column" marginBottom={1}>
+                {history.filter(h => h.role !== 'system' && h.role !== 'tool').map((msg, i) => (
+                    <Box key={i} flexDirection="column" marginTop={1}>
+                        {msg.role === 'user' ? (
+                            <Box flexDirection="row">
+                                <Text color="redBright" bold>╭─</Text>
+                                <Text color="cyan" bold> {sysCtx.user}@kali </Text>
+                                <Text color="dim">in </Text>
+                                <Text color="yellow" bold>~ </Text>
+                                <Text color="dim">❯ </Text>
+                                <Text color="white">{msg.content}</Text>
+                            </Box>
+                        ) : (
+                            <Box flexDirection="column" paddingLeft={2} borderStyle="singleLeft" borderColor="green">
+                                <Text bold color="green">[MONSTER-AI]</Text>
+                                {msg.content && <Box marginTop={1}><Text color="white">{msg.content}</Text></Box>}
+                            </Box>
+                        )}
+                        {/* Tool Calls */}
+                        {msg.role === 'assistant' && msg.tool_calls && (
+                            <Box flexDirection="row" paddingLeft={3} marginTop={1}>
+                                <Text color="yellow">[*] Executing Command: </Text>
+                                <Text color="dim">[{msg.tool_calls[0].function.arguments.command}]</Text>
+                            </Box>
+                        )}
+                    </Box>
+                ))}
+            </Box>
+
+            {/* Loading State */}
+            {status === 'thinking' && (
+                <Box marginTop={1} paddingLeft={2} borderStyle="singleLeft" borderColor="magenta">
+                    <Text color="magenta"><Spinner type="dots" /> Thinking...</Text>
+                </Box>
+            )}
+
+            {/* Input State */}
+            {status === 'idle' && (
+                <Box flexDirection="column" marginTop={1}>
+                    <Box flexDirection="row">
+                        <Text color="redBright" bold>╭─</Text>
+                        <Text color="cyan" bold> {sysCtx.user}@kali </Text>
+                        <Text color="dim">in </Text>
+                        <Text color="yellow" bold>~ </Text>
+                    </Box>
+                    <Box flexDirection="row">
+                        <Text color="redBright" bold>╰─➤ </Text>
+                        <Box paddingLeft={1}>
+                            {(TextInput as any).default 
+                                ? React.createElement((TextInput as any).default, { value: input, onChange: setInput, onSubmit: handleSubmit }) 
+                                : <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
+                            }
+                        </Box>
+                    </Box>
+                </Box>
+            )}
+
+            {/* Execution Confirmation */}
+            {status === 'confirming_exec' && (
+                <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="yellow" paddingX={1}>
+                    <Text color="yellow" bold>[!] ACTION REQUIRED: Tool Execution</Text>
+                    <Box marginY={1}>
+                        <Text color="white">The AI wants to run the following bash command:</Text>
+                    </Box>
+                    <Box paddingLeft={2} marginBottom={1}>
+                        <Text color="cyan">{pendingCmd}</Text>
+                    </Box>
+                    <Box flexDirection="row">
+                        <Text color="redBright" bold>Execute? [y/N] ➤ </Text>
+                        <Box paddingLeft={1}>
+                            {(TextInput as any).default 
+                                ? React.createElement((TextInput as any).default, { value: "", onChange: handleConfirm }) 
+                                : <TextInput value={""} onChange={handleConfirm} />
+                            }
+                        </Box>
+                    </Box>
+                </Box>
+            )}
+        </Box>
+    );
+};
+
+render(<MonsterAgent />);
